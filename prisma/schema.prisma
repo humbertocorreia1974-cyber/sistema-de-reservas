@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  termsAcceptedAt  DateTime?
+  id               String         @id @default(cuid())
+  name             String?
+  email            String         @unique
+  passwordHash     String
+  plan             String         @default("free")
+  // 🩹 2026-09-01: apps com múltiplos papéis (jogador/dono, recepção/vet/admin…)
+  // faziam `prisma.user.findMany({ where: { role } })` e o build quebrava
+  // (TS2353: 'role' não existe em UserWhereInput). Agora a fundação tem o campo.
+  role             String         @default("user")
+  stripeCustomerId String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  projects         Project[]
+  reservations     Reservation[]
+  orders           Order[]
+  notifications    Notification[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+model Restaurant {
+  id           String        @id @default(cuid())
+  name         String
+  tables       Table[]
+  reservations Reservation[]
+  menuItems    MenuItem[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Table {
+  id           String        @id @default(cuid())
+  number       Int
+  restaurantId String
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id])
+  reservations Reservation[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  orders       Order[]
+
+  @@index([restaurantId])
+}
+
+model Reservation {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  tableId      String
+  table        Table       @relation(fields: [tableId], references: [id])
+  startDate    DateTime
+  endDate      DateTime
+  status       String      @default("pending")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  restaurantId String?
+
+  @@index([userId])
+  @@index([tableId])
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id           String     @id @default(cuid())
+  name         String
+  description  String
+  price        Decimal
+  categoryId   String
+  category     Category   @relation(fields: [categoryId], references: [id])
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  orders       Order[]
+
+  @@index([categoryId])
+  @@index([restaurantId])
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  menuItems MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Order {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  tableId    String
+  table      Table    @relation(fields: [tableId], references: [id])
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([tableId])
+  @@index([menuItemId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
